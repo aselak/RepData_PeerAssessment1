@@ -1,25 +1,89 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Assignment 1"
+author: "Adnan Selak"
+date: "November 13, 2015"
+output: html_document
 ---
+## Loading and preprocessing Data
 
+```{r load libraries, echo=TRUE}
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(reshape2)
+library(cowplot)
+```
+```{r preprocess data, echo=TRUE}
+setwd("C:\\Users\\Selak\\Dropbox\\Coursera\\04 - Reproducible Research\\project_1")
+raw_data <- read.csv("activity.csv", header = TRUE)
+raw_data$date <- as.Date(raw_data$date, format = "%Y-%m-%d")
+## Total Means...
+sum_data <- summarise(group_by(raw_data,date),sum_steps = sum(steps, na.rm = TRUE))
+```
 
-## Loading and preprocessing the data
+## Total Number of Steps Per Day
+NA values are treated as 0.
 
+```{r plot sums, fig.height=3, echo=TRUE}
 
+ggplot(sum_data) + geom_histogram(aes(x=date, y=sum_steps), stat="identity") + xlab("Date") + ylab("Total Number of Steps") + scale_x_date()
+```
 
-## What is mean total number of steps taken per day?
+```{r mean and median, echo=TRUE}
+mean_data <- mean(sum_data$sum_steps)
+median_data <- median(sum_data$sum_steps)
+```
+Total Number of Steps daily mean is `r format(mean_data,digits=6,nsmall=2)` and median is `r format(median_data,digits=6,nsmall=2)`.
 
+## Daily Activity Pattern
+```{r daily activity, fig.height=3, echo=TRUE}
+interval_data <- group_by(raw_data,interval)
+sum_int_data <- summarise(interval_data,int_mean = mean(steps, na.rm = TRUE), int_median = median(steps,na.rm=TRUE))
+p2 <- ggplot(sum_int_data)
+p2 <- p2 + geom_line(aes(x=interval, y=int_mean, color = "int_mean")) + geom_line(aes(x=interval, y=int_median, color = "int_median"))
+p2 <- p2 + labs(color="Variables") + xlab("5-min Interval") + ylab("Number of Steps")
+p2
+#Find maximum value and corresponding row index
+max_val <- max(sum_int_data$int_mean)
+max_int <- which.max(sum_int_data$int_mean)
+```
+The interval containing the maximum number of steps (average) is `r sum_int_data$interval[max_int]`.
 
+# Data with NAs being replaced.
+Total number of records containing NA is `r count(raw_data[rowSums(is.na(raw_data)) > 0,])`.
+```{r NA replace an plot, echo=TRUE}
+# Replace NAs in steps column with Interval Means for number of steps
+merged_data <- merge(raw_data, sum_int_data, by.x = "interval", by.y = "interval")
+merged_data$steps[is.na(merged_data$steps)] <- merged_data$int_mean[is.na(merged_data$steps)]
+clean_data <- merged_data[,1:3]
 
-## What is the average daily activity pattern?
+## Total Means...
+sum_clean_data <- summarise(group_by(clean_data,date),sum_steps = sum(steps, na.rm = TRUE))
+## Total Number of Steps Per Day
+```
+## Total Number of Steps Per Day
+```{r plot sums NA, fig.height=3, echo=TRUE}
+ggplot(sum_clean_data) + geom_histogram(aes(x=date, y=sum_steps), stat="identity") + xlab("Date") + ylab("Total Number of Steps") + scale_x_date()
+```
+```{r mean and median NA, echo=TRUE}
+mean_data <- mean(sum_clean_data$sum_steps)
+median_data <- median(sum_clean_data$sum_steps)
+```
+Total Number of Steps daily mean is `r format(mean_data,digits=6,nsmall=2)` and median is `r format(median_data,digits=6,nsmall=2)`.
 
+## Weekday versus Weekend Activity Pattern
+```{r plot interval NA, fig.height = 3, fig.width=12, echo=TRUE}
+# Create DayType variable that holds Weekend or Weekday value based on weekdays function
+clean_data <- mutate(clean_data, daytype = ifelse(weekdays(clean_data$date) %in% c("Saturday","Sunday"), "Weekend", "Weekday"))
+sum_clean_int_data <- summarise(group_by(clean_data,interval,daytype) ,int_mean = mean(steps, na.rm = TRUE), int_median = median(steps,na.rm=TRUE))
+weekend_data <- filter(sum_clean_int_data, daytype == "Weekend")
+weekday_data <- filter(sum_clean_int_data, daytype == "Weekday")
+p1 <- ggplot() + geom_line(data = weekday_data, aes(x = interval, y = int_mean, color = "Mean" )) + 
+    geom_line(data = weekday_data, aes(x = interval, y = int_median, color = "Median" ))
+p1 <- p1 + labs(color="Variables") + xlab("5-min Interval") + ylab("Number of Steps")
+p2 <- ggplot() + geom_line(data = weekend_data, aes( x=interval, y=int_mean, color = "Mean" )) + 
+    geom_line(data = weekend_data, aes( x=interval, y=int_median, color = "Median"))
+p2 <- p2 + labs(color="Variables") + xlab("5-min Interval") + ylab("Number of Steps")
 
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
+plot_grid(p1,p2,labels=c("Weekday","Weekend"),ncol = 2, nrow = 1)
+```
